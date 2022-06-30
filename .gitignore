@@ -38,5 +38,8 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# pdfs
-.pdf
+# Literature
+literature/
+
+# DS store
+.DS_Store
