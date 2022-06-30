@@ -1,0 +1,478 @@
+---
+title: 'Scott Cunningham''s Codechella: DiD'
+author: "Erich Denk"
+date: "7/16/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+	fig.align = "center",
+	fig.height = 4,
+	fig.width = 4,
+	fig.pos = 'H',
+	message = FALSE,
+	warning = FALSE,
+	include = TRUE,
+	echo = FALSE
+)
+
+##Packages
+require(haven)
+require(tidyverse)
+require(kableExtra)
+require(knitr)
+```
+
+Here are my notes from attending Scott Cunningham's "Codechella" session covering new developments in Difference-in-Differences estimators. I will note that some things I have lifted directly from his slides, while other points are my own notes. All of Scott's resources are posted on his [\textcolor{blue}{github page}](https://github.com/scunning1975/codechella). I went ahead and omitted the R code in the output, but it can easily be added if wanted. 
+
+# Difference-in-Differences Intro
+
+- A research designed when non-random treatment is applied to one or more groups
+- A group of units do not receive the units at the same time (either never, or not yet)
+- Observations before and after each group
+- Research differences before and after, then differences the differences - hence the name
+
+## History
+ - An old, conceptually intuitive research design. Early attempts at using date back to several health policy debates. 
+ - In econ, particularly labor economics, Orley Ashenfelter (1978), Bob LaLonde (1986) and Card and Krueger (1994). 
+ - The single most popular method in economics at this point. Even more popular than RD. 25% of NBER working papers. 
+ - DiD is popular because economists interest in large potentially impactful policies. However, a bunch of papers are showing the standard methods are biased. But, lots of new papers suggesting solutions. 
+ 
+# Potential Outcomes Review
+- Sometimes called the Rubin-Neyman model. Potential outcomes are thoguht experiements about worlds that never existed, but which *could have*
+- Peter Hull and Pedro Sant'Anna insist that the potential outcomes notation should be different
+
+An example:  Aliens come and orbit earth, see sick people in hospitals and concluse the "hospitals" are hurting people. Motivated by anger and compassion they kill the doctors to save the patients. An instance of making causality synonymous with correlations. 
+
+Another example: "If a doctor puts a patient on a ventilator (D), will her symptoms change." Granger causality is another example of this. Every morning the rooster crows and the sun rises. Did the rooster cause the sun to rise, or did the sun cause the rooster to crow. Classic fallacy and excellent West Wing episode: *post hoc ergo propter hoc* "after this, therefore, because of this". 
+
+Final example: Sailor moves rudder back and forth but she remains on a straight line. There isn't even an observable correlation! Wind blows, she perfectly counters by turning the rudder. Systematic process erases the observable correlations. People rarely are behaving randomly. The movement of the rudder is endogenous. Rudder isn't broken. 
+
+## Potential Outcomes Notation
+"Potential outcomes are hypothetical states of the world (ex-ante) but historical outcomes are ex-post realizations. Major philosophical move here."
+
+The individual treatment effect $\delta_{i}$ equals $Y_{i}^1 - Y_{i}^0$. The outcome with and without the treatment. But we only observe one of these. We are left to look at the averages (ATE). 
+\begin{align*}
+E[\delta_{i}] &= E[Y_{i}^1 - Y_{i}^0]\\
+&= E[Y_{i}^1] - E[Y_{i}^0]
+\end{align*}
+
+The *switching equation* is defined by the individual's observed health outcomes, Y, is determined by the treatment assignment, *$D_{i}$*, and corresponding potential outcomes $$Y_{i} = D_{i}Y_{i}^1 +(1-D_{i})Y_{i}^0$$
+
+# Twoway Fixed Effects
+
+When working with panel data, the so-called "twoway fixed effects" (TWFE) estimator is the workhorse estimator. It is easy to run, a verions of OLS and many people are interested in only in mean effects. Often times the outcome variable depends on unobserved factors which are also correlated with our explanatory variable of interest. 
+
+Traditionally we use it for estimating constant treatment effects with unobserved time-invariant heterogeneity. It is a linear model, so you'll be estimating conditional mean treatment effects - if you want the median, you can't use this. Once you have dynamic treatment effects and differential timing, we have a lot of issues. 
+
+## Fixed Effects Regressions
+There are a lot of things FE cannot help. We can think of FE as a regression with panel dummies. But, by putting in the dummies, it is equivalent to demeaning the data. A feature of panel data. Running a regression with the time-demeaned variables is numerically equivalent to a regression of $y_{it}$ on $x_{it}$ and unit specific dummy variables.
+
+Even better, the regression with the time demeaned variables is consistent for $\beta$ even when $Cov[x_{it},c_{i}] \neq 0$
+
+The identification assumptions are that regressors are strictly exogenous conditional on the unobserved effect. That allows $x_{it}$ to be arbitrarilly related to $c_{i}$
+
+## Conclusion
+- We reviewed TWFE because it is commonly used with individual level panel data and difference-in-differences
+- Their main value is how they control for unobserved heterogeneity through a simple demeaning
+- What we will see in this seminar, though, is that strict exogeneity actually imposed not just parallel trends, but also treatment effect homogeneity under differential timing
+
+# Covariates
+Think of the John Snow cholera experiment. Policy cahnge moving dumping down the Thames. 
+
+Sample Averages: 
+$$\widehat{\delta}^{2\times 2}_{kU} = \bigg ( \overline{y}_k^{\mathop{\mathrm{post}}(k)} - \overline{y}_k^{\mathop{\mathrm{pre}}(k)} \bigg ) - \bigg ( \overline{y}_U^{\mathop{\mathrm{post}}(k)} - \overline{y}_U^{\mathop{\mathrm{pre}}(k)} \bigg )$$
+The two by two is not the causal parameter. However, we don't get ATT until we move to the Rubin framework. 
+\begin{align*}
+&\widehat{\delta}^{2\times 2}_{kU} = \bigg ( \underbrace{E\big[Y^1_k  \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Post}}\big] - E\big[Y^0_k  \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Pre}}\big] \bigg ) - \bigg(E\big[Y^0_U  \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Post}}\big] - E\big[ Y^0_U  \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Pre}}\big]}_{\text{Switching equation}} \bigg) \\
+&+ \underbrace{E\big[Y_k^0  \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Post}}\big] - E\big[Y^0_k  \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Post}}\big]}_{\text{Adding zero}}
+\end{align*}
+
+Then we can add 0, and rearrange things. 
+
+\begin{align*}
+&\widehat{\delta}^{2\times 2}_{kU} = \underbrace{E\big[Y^1_k \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Post}}\big] - E\big[Y^0_k \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Post}}\big]}_{\text{ATT}} \\
+&+\Big[\underbrace{E\big[Y^0_k \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Post}}\big] - E\big[Y^0_k \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Pre}}\big] \Big] - \Big[E\big[Y^0_U \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Post}}\big] - E\big[Y_U^0 \mathop{\mathrm{\,\vert\,}}\mathop{\mathrm{Pre}}\big] }_{\text{Non-parallel trends bias in $2\times 2$ case}} \Big]
+\end{align*}
+
+DiD doesn't have to be some exotic estimator. At the end of the day it only has to be a group of differences in means. The ATT is the first line! If our second and third terms are equal, the second line drops out and we have ATT by itself. If not, our pretrend assumption is violated. 
+
+## Bias in our go-to estimators
+- Good reasons to use TWFE:
+  + It estimates the ATT under parallel trends
+  + It’s easy to calculate the standard errors
+  + It’s easy to include multiple periods
+  + We can study treatments with different treatment intensity. (e.g., varying increases in the minimum wage for different states)
+
+Think about Card and Krueger. OLS basically implicitly imputes the counterfactual for the treatment. Under parallel trends, OLS estimates the ATT for the two group case. Calculating standard errors is easy, multiple time periods is easy. But including covariates and time varying treatment (“differential timing”) will introduce problems.
+
+## Alberto Abadie (2005)
+- Abadie is really used best for longitudinal data or repeated cross sections where treatment occurs at one point in time. 
+- Abadie modeled differential selection based on covariates
+- DD type estimator but not TWFE. 
+- Still need treatment and comparison groups, before and after, but with conditional parallel trends. 
+- High level: Look for natural experiments and use econometrics to clean things up. 
+- No randomization. Remember, DD doesn't require randomization = it requires parallel trends. Treatment is selecting on observable covariates.
+- We may control for X because treatement is only conditional on X. 
+- In TWFE when you control for baseline X, it gets absorbed by the unit FE. 
+
+### Three step method for Abadie:
+1. Compute each unit's "after minus before"
+2. Then estimate a propensity score which you'll use to weight each unit
+3. Finally, compare weighted changes in “after minus before” for treatment versus comparison groups
+
+You can have heterogeneous treatment effects, but not differential timing
+
+### Assumptions
+1. Conditional parallel trends
+2. Common support - Only those where propensity scores overlap. Range of propensity score that contains treatment and control group units. 
+
+Define the ATT parameter of interest 
+$$ATT=E[Y_{t}^1-Y_{t}^0|D_{t} =1]$$
+Abadie's estimator
+$$E[\frac{Yt-Yb}{Pr(D_{t}=1)} \times \frac{D_{t}-Pr(D=1|X_{b})}{1-Pr(D=1|X_{b})}]$$
+
+### Propensity scores 
+- Usually there’s almost no guidance that I’ve seen in how to estimate the propensity score except to say use logit or probit
+- Dehejia and Wahba (2002) anyway
+- Not so here – this is semi-parametric in the sense that you have to use a series of polynomials based on the X controls
+- Weirdly, you can use OLS linear probability models (which I’ve never seen) or something called series logit estimation
+
+Stata command is called absdid
+
+You need treatment (varname), X variables, the order in which the variables occur, and the exact estimator (LPM or logit) 
+
+Use the LaLonde NSW job trainings program data?
+
+### Concluding remarks
+LaLonde longitudinal data where you have a baseline and a follow-up
+Repeated cross-sections or panels
+Controls will cause the estimates to vary based on the type of approximation you use (logit for instance vs LPM) and the order in which the polynomials are used
+
+## Sant'Anna and Zhao (2020) Doubly Robust
+- They combine regression and weighting estimators into one specification and are consistent so long as:
+  - The regression specification for the outcome is correctly specified
+  - The propensity score specification is correctly specified
+  - DR is a class of estimators that possess this property
+  - You’re basically controlling for X twice: with a linear regression, with a propensity score, to cover your bas
+
+- Bridging gaps while simultaneously moving the ball forward
+- Basic assumptions for DD with covariates. 
+- TWFE assumptions for DD with covariates
+- Estimation alternatives to TWFE
+
+Maybe you are unsure whether the propensity score was properly specificed. Two strikes instead of one. 
+
+DD *always* estimates the ATT becasue it’s only the treatment effect for the treatment group in the post-treatment period
+
+Basic assumptions of DiD
+1. Assume panel data or repeated cross-sectional data
+2.  Conditional parallel trends: If you were putting covariates into your DD regression, then you were assuming conditional parallel trends
+3. Common support or overlap
+
+## Assumption 4
+- The implications of that TWFE regression with assumptions 1-3 gave us those previous expressions which then require placing further restrictions on treatment effects and trends when estimating with TWFE.
+- TWFE Assumption 4: Homogenous treatment effects in X
+
+This is because when you difference out those previous equations, you need $\theta X$ to cancel to leave you with $\delta$ which implies homogeneity in X.
+
+## Assumption 5 and 6
+For D = 0, 1, we need “no X-specific trends in both groups”: 
+$$E[Y_{1} -Y_{0}|D = d,X ] = E[Y_{1} -Y_{0}|D = d]$$
+
+Intuition: Sant’Anna and Zhao (2020) say in footnote 4 “[this] follows from analogous arguments” which is the previous slides’ manipulation of terms. Key is to remember these are time-varying covariates so they don’t cancel out within treatment category, so you need the trends in X to cancel out.
+
+Without these six, in general TWFE will not identify ATT. Unclear how off it’ll be, but it will be biased is the point.
+
+What if you claim you need X for conditional parallel trends? 
+You have three options: 
+
+1. Outcome regression a la Heckman 1997 (Assumptions 1-3)
+2. Inverse probability weighting (Abadie 2005) Assumptions 1-6
+3. TWFE (Everybody!) Need assumptions 1-6
+
+Problem is options 1 and 2 need the models to be correctly specified. Doubly robust combines them to give us insurance. That’s the basic idea. Gives you two chances to be wrong.
+
+### To a kid with a hammer, everything is a nail
+Use the right tool (oven) for the job (making lasagna), not the same tool (hammer) regardless of the job (making lasagna)
+
+One of the main things I learned from this paper was again biases in TWFE with covariates – Mixtape and MHE don’t cover this. This method only needed three assumptions not the six for TWFE.
+
+Like everything Pedro does, there is code for this but it’s only in R – `DRDID`
+
+But it’s one of the main options in Callaway and Sant’anna under differential timing, and therefore it’s crucial we understand this. But you still have to have specified correctly either at least the outcome model or propensity score model.
+
+# Differential Timing
+
+- We covered mostly the simple two group case
+- In the two group case, we can estimate the ATT under parallel trends using OLS with unit and time fixed effects
+- If we have covariates, then we can use TWFE under restrictive assumptions, or we have other options (OR, IPW, DR)
+
+- For this next part, similar to how we did with Sant’Anna and Zhou (2020), we will decompose TWFE to understand what it needs for unbiasedness under differential timing
+- All of this is from Goodman-Bacon (2021, forthcoming) though the expression of the weights is from 2018 for personal preference
+- Goodman-Bacon (2021, forthcoming) shows that parallel trends is not enough for TWFE to be unbiased when treatment adoption is described by differential timing
+- TWFE with differential timing uses treated groups as controls – not all estimators do – and this can introduce bias
+
+## Decomposition
+- TWFE estimates a parameter that is a weighted average over all 2x2 in your sample
+- TWFE assigns weights that are a function of sample sizes of each “group” and the variance of the treatment dummies for those groups
+- TWFE needs two assumptions: that the variance weighted parallel trends are zero (far more parallel trends iow) and no dynamic treatment effects (not the case with 2x2)
+- Under those assumptions, TWFE estimator estimates the variance weighted ATT as a weighted average of all possible ATTs
+
+## Cheng and Hoekstra Castle Doctrine
+- Cheng and Hoekstra (2013) are interested in whether expansions to “castle doctrine statutes” at the state level increase or decrease gun violence.
+- Prior to these expansions, English common law principle required “duty to retreat” before using lethal force against an assailant except when the assailant is an intruder in the home
+  - The home is one’s “castle” – hence, “castle doctrine”
+  - When intruders threatened the victim in the home, the duty to retreat was waived and lethal force in self-defense was allowed
+
+## Bacon Decomposition
+TWFE estimate yields a weighted combination of each groups’ respective 2x2 (of which there are 4 in this example)
+
+- Let there be two treatment groups (k,l) and one untreated group (U)
+- k,l define the groups based on when they receive treatment (differently in time) with k receiving it earlier than l
+- Denote $\overline{D}_{k}$ as the share of time each group spends in treatment status
+- Denote $\delta_{jb}^{2x2}$ as the canonical 2 × 2 DD estimator for groups *j* and *b* where *j* is the treatment group and *b* is the comparison group
+
+We will get $k^2$ 2 x 2s with k timing groups. 
+
+TWFE estimates yields a weighted combination of each groups' respective 2x2 (of which there are 4 in this example)
+
+$$\delta^{DD} = \sum_{k \neq U} s_{kU}\delta_{kU}^{2x2} + \sum_{k \neq U} \sum_{I>k} s_{kl}[\mu_{kl}\delta_{kl}^{2x2,k} + (1 - \mu_{kl})\delta_{lk}^{2x2,l}]$$ 
+where the first 2x2 combines the k compared to U and the I to U (combined to make the equation shorter)
+
+### Weights discussion
+- Two things to note:
+  - More units in a group, the bigger its 2x2 weight is
+  - Group treatment variance weights up or down a group’s 2x2
+- Think about what causes the treatment variance to be as big as possible. Let’s think about the sku weights.
+  - D=0.1. Then0.1×0.9=0.09 
+  - D=0.4. Then0.4×0.6=0.24
+  - D=0.5. Then0.5×0.5=0.25 
+  - D=0.6. Then0.6×0.4=0.24
+- This means the weight on treatment variance is maximized for *groups treated in middle of the panel*
+
+## Weighted Group-Time ATT
+### Callaway and Sant'Anna 2020
+
+CS considers identification, aggregation, estimation and inference procedures for ATT in DD designs with:
+  1. multiple time periods
+  2. variation in treatment timing (i.e., differential timing)
+  3. parallel trends only holds after conditioning on observables
+
+Group-time ATT is the parameter of interest in CS
+
+We can apply their R code to the Castle doctrine paper.
+```{R}
+library(readstata13)
+library(ggplot2)
+library(did) # Callaway & Sant'Anna
+
+castle <- data.frame(read.dta13('https://github.com/scunning1975/mixtape/raw/master/castle.dta'))
+castle$effyear[is.na(castle$effyear)] <- 0 # untreated units have effective year of 0
+``` 
+
+```{R}
+# Estimating the effect on log(homicide)
+atts <- att_gt(yname = "l_homicide", # LHS variable
+               tname = "year", # time variable
+               idname = "sid", # id variable
+               gname = "effyear", # first treatment period variable
+               data = castle, # data
+               xformla = NULL, # no covariates
+               #xformla = ~ l_police, # with covariates
+               est_method = "dr", # "dr" is doubly robust. "ipw" is inverse probability weighting. "reg" is regression
+               control_group = "nevertreated", # set the comparison group which is either "nevertreated" or "notyettreated" 
+               bstrap = TRUE, # if TRUE compute bootstrapped SE
+               biters = 1000, # number of bootstrap iterations
+               print_details = FALSE, # if TRUE, print detailed results
+               clustervars = "sid", # cluster level
+               panel = TRUE) # whether the data is panel or repeated cross-sectional
+
+# Aggregate ATT
+agg_effects <- aggte(atts, type = "group")
+summary(agg_effects)
+```
+```{r}
+# Group-time ATTs
+summary(atts)
+```
+
+```{r}
+# Plot group-time ATTs
+ggdid(atts)
+``` 
+
+```{r}
+# Event-study
+agg_effects_es <- aggte(atts, type = "dynamic")
+summary(agg_effects_es)
+```
+
+```{r}
+# Plot event-study coefficients
+ggdid(agg_effects_es)
+```
+
+### Chaisemartin and D'Haultoeuiflle (2020)
+Main takeaways: 
+- TWFE can give you non-intelligible weights. Hard to interpret. 
+- Can choose a alternative estimand that bypass these issues. 
+
+Some code implementing this in the dCdH decomposition.
+```{r}
+# Libraries
+library(haven)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(bacondecomp) 
+library(TwoWayFEWeights)
+library(fixest)
+library(glue)
+```
+
+```{r}
+# Load Cheng and Hoekstra (2013, JHR) Castle Data
+castle <- haven::read_dta("https://github.com/scunning1975/mixtape/raw/master/castle.dta")
+#-----------------------------------------------------------------------------
+# Do some data manipulations
+# replace NA treatment_date with Inf
+castle$treatment_date = ifelse(is.na(castle$treatment_date), Inf, castle$treatment_date)
+# Create treatment dummy: 1 if treated by that year, 0 otherwise
+castle$treated <- as.numeric(castle$year >= castle$treatment_date)
+```
+
+```{r}
+# Start the analysis
+#---------------------------------------------------------------------------------------
+# Get TWFE coefficient
+twfe <- fixest::feols(l_homicide ~ treated| sid + year, 
+                      data = castle,
+                      cluster = ~sid)
+
+summary(twfe)
+```
+
+```{r}
+# Get Bacon decomposition (Just for comparison)
+df_bacon <- bacon(l_homicide ~ treated,
+                  data = castle,
+                  id_var = "sid",
+                  time_var = "year")
+
+# Get de Chaisemartin and D'Haultfoeuille (dCDH) Decomposition
+dCDH_decomp <- twowayfeweights(
+  df = castle, 
+  Y = "l_homicide", 
+  G = "sid",
+  T = "year", 
+  D ="treated",
+  #weights = "W",
+  cmd_type =  "feTR"
+)
+```
+````{r}
+# Weakly Positive weights are 1
+dCDH_positive <- sum(dCDH_decomp$weight[dCDH_decomp$weight>=0])
+dCDH_positive
+```
+```{r}
+# Negative weights are 0
+dCDH_negative <- sum(dCDH_decomp$weight[dCDH_decomp$weight<0])
+dCDH_negative
+```
+
+## Sun and Abraham
+- SA is a decomposition of the population regression coefficeints on event study leads and lags with differential timing estimated with TWFE
+- They show that the population coefficient is "contaminated by information from other leads and lags
+- SA presents an alternative estimator similar to CS.
+- Problems seem to occur with DD when we introduce treatment effect heterogeneity
+- Under treatment effect heterogeneity, spurious non-zero positive lead coefficients even without a pretrend. 
+- Exacerbate by the TWFE related weights related weights as under some scenarios, the weights sum to zero and“cancel out” the treatment effects from other periods
+- They present a 3-step TWFE based alternative estimator which addresses the problems that they find
+
+- When treatment occurs at the same time, we say they are part of the same cohort, e
+- If we bin the data, then a lead or lag l will appear in the bin g so sometimes they use g instead of l or $l \in  g$
+- Building block is the “cohort-specific ATT” or $CATT_{e,l}$ – same thing as CS group-time ATT
+- Estimate $CATT_{e,l}$ with population regression coefficient $\mu_{l}$
+
+I'm skipping the notation in my notes here, but Scott's slides are available [\textcolor{blue}{here}](https://github.com/scunning1975/codechella/blob/main/slides/codechella.pdf). 
+
+### Identifying Assumptions
+Assumption 1: Parallel trends in baseline outcomes:
+$E[Y_{i,t}^\infty- Y^\infty + i,s | E_{i} =e]$ is the same for all $e \in supp(E_{i})$ and for all *s*, *t* and is equal to $E[Y^\infty -Y^\infty]$
+
+Interesting SA comment: Never-treated units are likely to differ from ever-treated units in many ways; think of a Roy model. What does it imply that they chose not to get treated? It may imply net negative treatment effects and that could mean they may not share the same evolution of baseline outcomes as the treatment groups. If you think they are unlikely to satisfy this assumption, then drop them. Almost like a synthetic control approach.
+
+Assumption 2: No anticipator behavior in pre-treatment
+periods: There is a set of pre-treatment periods such that
+$E[Y_{i,e+l}^{e} - Y_{i,e+l}^\infty | E_{i} =e] = 0$ for all possible leads. 
+
+Basically means that potential outcomes prior to treatment at baseline by on average the same. This means there is no pre-trends, essentially. This is most plausible if the full treatment paths are not known to the units (e.g., Craigslist opening erotic services without announcement)
+
+Assumption 3: Treatment effect homogeneity: For each relative time period l, the $CATT_{e,l}$ doesn’t depend on the cohort and is equal to $CATT_{l}$.
+
+Assumption 3 requires each cohort experience the same path of treatment effects. Treatment effects need to be the same across cohorts in every relative period for homogeneity to hold, whereas for heterogeneity to occur, treatment effects just need to differ across cohorts in one relative time period. Doesn’t preclude dynamic treatment effects, though. It just imposes that cohorts share the same treatment path.
+
+Again, I got a little behind and have skipped ahead beyond the discussion of the weights here. 
+
+### Conclusions
+- Bacon shows the TWFE coefficient on the static parameter is “contaminated” by other periods leads and lags
+- Three strong assumptions needed for TWFE to be unbiased: parallel trends, no anticipation, and treatment homogeneity
+- Three step interaction-weighted estimator is an alternative Doesn’t restrict to treatment profile homogeneity
+- Callaway and Sant’Anna (2020) and Sun and Abraham (2020) use different controls, but under certain situations (no covariates, never treated) they are the same (“nested”)
+- Software in R and Stata exist
+
+## Borusyak, Jaravel and Spiess (2021) 
+Explicit imputation estimator
+- They provided analysis of TWFE flaws under heterogeneity as well as event study analysis
+- This is a paper that shows the problems with TWFE under heterogeneity, but then writes out a solution that uses imputation
+
+### Static model
+Themes
+$y_{it} = \alpha_{i} +\gamma t +\delta D_{i} + \epsilon_{i}$
+Contribution: Define target parameters and assumptions. Proposes a more formal disciplined approach of choosing the weighted average of treatment effects
+
+### Basics
+- Potential outcomes without treatment will follow a parallel trend (but one with a bit more structure)
+- No anticipatory effects
+- Treatment effects follow some model that restricts heterogeneity a priori for economic reasons
+
+### Event study contributions
+1. Can’t identify point estimates of leads in event study design Seperate out the testable assumptions about pre-trends from dynamic treatment effects under these assumptions
+2. Implicit homogeneity assumption in event study may lead to estimates putting negative weight on long-run lags under differential timing
+  - When we have long lags, regression is using extrapolation based on forbidden regressions which negatively weights
+  - This is fine with homogenous treatment effects and in fact is an argument for TWFE, but not with heterogeneity
+3. Spurious identification of longrun effects can happen under heterogeneity with staggered rollouts
+
+Again, this paper is telling us that the presence of heterogeneous treatment effects is largely what makes analysis so challenging
+
+### Imputation estimator
+- “The most efficient linear unbiased estimator of any pre- specified weighted average of treatment effects under ho- moskedasticity”
+- Separate assumption from estimation; incorporate the former Estimate a flexible high-dimensional regression
+Aggregate the coefficients
+- All other unbiased linear estimators are less efficient 
+- Avoids pre-test problems pointed out by Roth (2018) (just wasn’t able to work it in unfortunately)
+
+Again, more slides for this paper, he was moving quickly as time was running out.
+
+# Basic Assumptions Going Forward
+Everything is kinda broken and needs fixed
+
+Differential timing with heterogeneity - Bacon, Callaway and Sant'anna, etc.
+Covariates - Abadie, Santa'anna and Zhao
+Fuzzy - de Chaisemartin and D'Haultfoeuille
+
+We are at the conclusion of the waves of papers and the software is now widely available. Just need to make the initial investment. 
+
+- Simple 2x2 has its own problems when estimated using TWFE if you include covariates
+- Stronger assumptions needed to include covariates, and bias can be large
+- Don’t control for covariates that could be affected by the outcome
+- Why pay more for the same car? Actually fewer assumptions in some cases
+- Main problem in differential timing is heterogeneity and the use of already-treated units as controls
+- If you use TWFE for differential timing, report the Bacon decomposition and report the number of never-treated units
+- If you are estimating event studies using TWFE, remember to drop two leads to address multiple forms of collinearity (SA; BJS)
+- If you have differential timing, consider going directly to one of the robust estimators we discussed
+- CS has additional benefits like examining heterogenous responses by timing – this is part of the value of defining target parameters as weighted averages

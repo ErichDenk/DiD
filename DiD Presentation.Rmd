@@ -1,0 +1,563 @@
+---
+title: "New Literature in Difference-in-Differences"
+subtitle: "A guide for practitioners"
+author: "Erich Denk & Tim Simcoe"
+institute: "TPRI"
+date: "11/10/2021"
+output:
+  beamer_presentation:
+    theme: "Madrid"
+    colortheme: "seahorse"
+    fonttheme: "structurebold"
+    slide_level: 2  
+    fig_width: 5  
+    fig_height: 4  
+    fig_caption: true  
+    highlight: tango  
+link-citations: yes  
+urlcolor: blue
+linkcolor: blue  
+citecolor: blue  
+---
+
+```{r setup and data, include=FALSE}
+knitr::opts_chunk$set(
+	fig.align = "center",
+	fig.height = 4,
+	fig.width = 4,
+	fig.pos = 'H',
+	message = FALSE,
+	warning = FALSE,
+	include = TRUE,
+	echo = FALSE
+)
+
+remove(list = ls())
+
+setwd("/Users/emdenk/Documents/general references")
+# Packages
+library(tidyverse)
+require(janitor)
+require(broom)
+require(kableExtra)
+require(did2s)
+require(haven)
+require(estimatr)
+require(lfe)
+require(did)
+
+castle <- haven::read_dta("https://github.com/scunning1975/mixtape/raw/master/castle.dta") %>%
+  mutate(g = if_else(is.na(effyear) == T, 0, effyear))%>%
+  mutate(time_til = if_else(is.na(time_til) == T, Inf, time_til))%>%
+  mutate(treat = if_else(post == 1, T,F))
+```
+
+## Motivation
+![How many of us feel (Credit: Khoa Vu)]("/Users/emdenk/Documents/general references/difference in differences/didmeme.jpeg"){width=75%, height=75%}
+
+## Outline
+- Describe newly raised **potential** issues with standard DiD estimates
+
+- Focus on 3 particularly relevant papers (there are many more!) and the problems of differential treatment timing
+  + Goodman-Bacon [(2019)](https://www.nber.org/system/files/working_papers/w25018/w25018.pdf)
+  + Callaway and Sant'Anna [(2020)](https://pedrohcgs.github.io/files/Callaway_SantAnna_2020.pdf)
+  + Borusyak, Jaravel, and Speiss [(2021)](https://arxiv.org/pdf/2108.12419.pdf)
+
+- Discuss solutions and note software packages (if any) presented by these papers
+
+- *Very brief* overview of a few other papers
+
+- **Disclaimer:  The canoncial 2x2 (two groups, two time periods) is perfectly fine!**
+
+## What is DiD?
+- One of the most common research designs for evaluating non-random treatment applied to multiple groups
+- Some units may never receive treatment or have not yet received treatment
+- Observe each group before and after the treatment
+- Examine the difference between the groups before, the differences after, and difference the differences
+- New wave of literature raises concerns about canonical DiD regressions
+
+## Advantages of DiD
+- Conceptually intuitive. John Snow and Cholera, Card & Krueger and the Minimum Wage
+
+- Helpful in answering big and important questions. State policies, changes in corporate laws, technology diffusion etc. 
+
+![Currie et al (2020) show 25% of NBER working papers use DiD]("/Users/emdenk/Documents/general references/difference in differences/curriemethods.png"){width=55%, height=55%}
+
+## Brief Review of TWFE
+In the 2x2 Case:
+$$y_{i} = \alpha(POST) + \alpha(TREAT) + \beta^{DD}(POST*TREAT)$$
+
+But with multiple time periods (and often multiple treatment periods):
+$$y_{it} = \alpha_{t} + \alpha_{i} + \beta^{DD}(D_{it}) + \mu_{it} $$
+
+- Two-Way Fixed Effects in panel data, is the most common DiD estimation
+- Often, we just add covariates and assume *conditional* parallel trends
+$$y_{it} = \alpha_{t} + \alpha_{i} + \beta^{DD}(D_{it}) + \theta \cdot X_{it} + \mu_{it} $$
+
+## Brief Review of TWFE (cont.)
+- Identifying assumptions for TWFE
+  + regressors are strictly exogenous conditional on the unobserved effect
+  + Allows $x_{it}$ to be arbitrarily related to unobserved covariates
+  + Regressors will vary over time for at least some *i* and are not collinear
+  
+- Inference: Cluster standard errors by panel unit
+  + Allows correlation in the $\mu_{it}$'s for a given *i*
+  + Need a reasonably large number of clusters
+
+## TWFE Conclusion
+- Good reasons for TWFE specification
+  + ATT under parallel trends
+  + SEs easily obtained
+  + Include multiple periods
+  + Allow different treatment intensities
+  
+- But problems stemming from:
+  + Varying time treatment/differential timing
+  + Inclusion of covariates
+  
+## Working example for presentation
+- Cheng and Hoekstra [(2012)](http://jhr.uwpress.org/content/48/3/821.short) on "Castle Doctrine"
+
+- Research Q: *What is the effect of the passage of self-defense laws on homicides and violent crime?*
+
+- Motivation: "Stand your ground" laws may make the expected cost of crime higher
+
+- Findings: Opposite, an 8pp *increase* in the number of murders and non-negligent man-slaughters after passage of such laws
+
+## Castle Doctrine Event Study
+```{r Event Study, include=FALSE}
+#--- global variables
+crime1 <- c("jhcitizen_c", "jhpolice_c", 
+            "murder", "homicide", 
+            "robbery", "assault", "burglary",
+            "larceny", "motor", "robbery_gun_r")
+
+demo <- c("emo", "blackm_15_24", "whitem_15_24", 
+          "blackm_25_44", "whitem_25_44")
+
+# variables dropped to prevent colinearity
+dropped_vars <- c("r20004", "r20014",
+                  "r20024", "r20034",
+                  "r20044", "r20054",
+                  "r20064", "r20074",
+                  "r20084", "r20094",
+                  "r20101", "r20102", "r20103",
+                  "r20104", "trend_9", "trend_46",
+                  "trend_49", "trend_50", "trend_51"
+)
+
+lintrend <- castle %>%
+    select(starts_with("trend")) %>% 
+  colnames %>% 
+  # remove due to colinearity
+  subset(.,! . %in% dropped_vars) 
+
+region <- castle %>%
+  select(starts_with("r20")) %>% 
+  colnames %>% 
+  # remove due to colinearity
+  subset(.,! . %in% dropped_vars) 
+
+# Grouping all leads befreo t-6 as lead 6 given
+castle <- castle %>%
+  mutate(
+    time_til = year - treatment_date,
+    lead1 = case_when(time_til == -1 ~ 1, TRUE ~ 0),
+    lead2 = case_when(time_til == -2 ~ 1, TRUE ~ 0),
+    lead3 = case_when(time_til == -3 ~ 1, TRUE ~ 0),
+    lead4 = case_when(time_til == -4 ~ 1, TRUE ~ 0),
+    lead5 = case_when(time_til == -5 ~ 1, TRUE ~ 0),
+    lead6 = case_when(time_til <= -6 ~ 1, TRUE ~ 0), # Capping at Lead -6 for imbalance
+    
+    lag0 = case_when(time_til == 0 ~ 1, TRUE ~ 0),
+    lag1 = case_when(time_til == 1 ~ 1, TRUE ~ 0),
+    lag2 = case_when(time_til == 2 ~ 1, TRUE ~ 0),
+    lag3 = case_when(time_til == 3 ~ 1, TRUE ~ 0),
+    lag4 = case_when(time_til == 4 ~ 1, TRUE ~ 0),
+    lag5 = case_when(time_til == 5 ~ 1, TRUE ~ 0)
+  )
+
+event_study_formula <- as.formula(
+  paste("l_homicide ~ + ",
+        paste(
+          paste(region, collapse = " + "),
+          paste(paste("lead", 2:6, sep = ""), collapse = " + "),
+          paste(paste("lag", 0:5, sep = ""), collapse = " + "), sep = " + "),
+        "| year + state | 0 | sid"
+  ),
+)
+
+event_study_reg <- felm(event_study_formula, weights = castle$popwt, data = castle)
+summary(event_study_reg)
+
+# order of the coefficients for the plot
+plot_order <- c("lead6", "lead5", "lead4", "lead3", 
+                "lead2", "lag0", "lag1", 
+                "lag2", "lag3", "lag4", "lag5")
+
+# grab the clustered standard errors and average coefficient estimates
+# from the regression, label them accordingly
+# add a zero'th lag for plotting purposes
+leadslags_plot <- tibble(
+  sd = c(event_study_reg$cse[plot_order], 0),
+  mean = c(coef(event_study_reg)[plot_order], 0),
+  label = c(-6, -5, -4, -3, -2, 0, 1,2,3,4,5, -1)
+)
+```
+```{r Estudy Plot, fig.height= 3}
+leadslags_plot %>%
+  ggplot(aes(x = label, y = mean,
+             ymin = mean-1.96*sd, 
+             ymax = mean+1.96*sd)) +
+  geom_hline(yintercept = 0.08, color = "red") +
+  geom_point() +
+  geom_line() +
+  geom_ribbon(alpha = 0.2) +
+  theme_minimal() +
+  xlab("Years before and after castle doctrine expansion") +
+  ylab("Log Homicide Rate") +
+  labs(title = "Event Study of Castle Doctrine Law") +
+  geom_hline(yintercept = 0,
+             linetype = "dashed") +
+  geom_vline(xintercept = 0,
+             linetype = "dashed") + 
+  theme(title = element_text(size=10, face="bold"))
+```
+
+# The Bacon Decomposition
+
+## Goodman-Bacon Key Facts
+- Analyzes the TWFE estimator *if there is variation in when* treatment turns on. 
+- In essence, shows what $\beta^{DD}$ is *algebraically*
+- Some key facts
+  + The DD estimator = weighted average of all the 2x2 DDs.
+  + Every unit is necessarily part of the control group in *some* 2x2s
+  + Weights come from the relative *size of the subgroup*
+  + Estimates can change across specifications because the weights change, the 2x2 DD terms change, or both
+  + Controls can introduce new and unintended identifying variation
+
+## All possible 2x2s in the three group case
+![Goodman-Bacon Figure 1]("/Users/emdenk/Documents/general references/difference in differences/Goodman-BaconFig1.png"){width=70%, height=70%}
+
+## The forbidden comparison
+Panel D. Our late cohort is the treated and early treated cohort is control, but only after they are already treated. 
+
+![Goodman-Bacon Figure 1]("/Users/emdenk/Documents/general references/difference in differences/Goodman-BaconFig2.png"){width=70%, height=70%}
+
+## The Weights
+- The weights of the "Weighted 2x2" are determined by: 
+
+  1. Sample size (what share of units are in each treatment wave) - bigger groups get more weight
+  2. Subgroup variance of treatment. OLS prefers groups where the Fixed Effect-adjusted treatment dummy varies more. 
+    
+    + Bigger weights when treated and control times are equally sized
+    + Early units have long post periods, short post periods. Opposite for late. Again, impacts variance
+  
+- These weights are just how OLS handles things all the time!
+
+## Goodman-Bacon Implications
+- Differential trends in counter-factual outcomes *in a given timing group* can generate some bias proportional to the weight of the group
+
+- Groups treated in the middle of the panel matter most
+
+- Weights can be calculated and used in a balance test
+
+## Goodman-Bacon Implications (cont.)
+- If treatment effects change monotonically over time or are "gradual" (not stepwise)
+  + DD estimate is biased away from sign of true effect
+  + This comparison group is "contaminated" and will cause us to underestimate the size of our treatment effect
+  
+![Goodman-Bacon Figure 3]("/Users/emdenk/Documents/general references/difference in differences/Goodman-BaconFig3.png"){width=45%, height=45%}  
+
+## Goodman-Bacon Implications (cont.)
+- If treatment effects are constant
+  + DD estimate is variance weighted ATE ($\neq$ ATT)
+  + Again, middle panel groups get more weight than their sample size implies
+
+- Using Callaway and Sant'Anna, Sun and Abraham, or a stacked setup will address much of the concern
+
+- **In general, many of the other papers that are out there are focused getting rid of the "bad stuff" he's shown here**
+  
+## Goodman-Bacon Statistical Packages
+- Stata and R `bacondecomp`
+  + calculates the decomposition
+  + Scatter plot of 2x2s against their weights
+  + Stores weights for future calculations
+  + Good tool for seeing where the action is. Driven by one group, one type of comparison?
+  
+- Revisiting Cheng and Hoekstra...  
+```{r Basic Decomp, include=FALSE}
+library(bacondecomp)
+df_bacon <- bacon(l_homicide ~ post,
+                  data = castle,
+                  id_var = "state",
+                  time_var = "year")
+```
+```{r, include=TRUE, echo=FALSE, results='asis'}
+kable(head(df_bacon), "latex")
+```
+
+## Equivalence of weighted sum and TWFE
+If we multiply those estimates by the weights...
+```{r Equivalence, include=TRUE, echo=FALSE}
+coef_bacon <- sum(df_bacon$estimate * df_bacon$weight)
+print(paste("Weighted sum of decomposition =", round(coef_bacon, 4)))
+```
+
+We get the same thing as estimating the TWFE 
+$$ log(homicides) = \beta^{DD} + \alpha_{i} + \gamma_{t} $$
+```{r include=TRUE, echo=FALSE}
+fit_tw <- lm(l_homicide ~ post + factor(state) + factor(year), 
+             data = castle)
+print(paste("Two-way FE estimate =", round(fit_tw$coefficients[2], 4)))
+```
+
+## Which 2x2s are important?
+```{r Plot, include=TRUE, echo=FALSE, fig.height=3, fig.width=3.5, fig.align='center'}
+library(ggplot2)
+
+ggplot(df_bacon) +
+  aes(x = weight, y = estimate, color = factor(type)) +
+  labs(x = "Weight", y = "Estimate",
+       title = "Weights v. Point Estimate",
+       subtitle = "One estimate heavily weighted") +
+  geom_point() +
+  scale_color_manual(labels = c("Early v. Late","Late v. Early", "Treat v. Untreat"), 
+                     values = c("#ece7f2", "#a6bddb", "#2b8cbe")) +
+  ggthemes::theme_clean()+
+  theme(plot.title = element_text(size = 12), 
+        plot.subtitle = element_text(face="italic", size=10),
+        legend.position = "bottom",
+        legend.text = element_text(size =6),
+        axis.text = element_text(size = 8),
+        legend.title = element_blank())
+  
+```
+# Ad Hoc Solutions: Callaway & Sant'Anna (2020), Borusyak, Jaravel, and Speiss (2021), and "Stacked DiD"
+
+## "Difference-in-Differences with Multiple Time Periods" Callaway and Sant'Anna (2020)
+Considers the issues raised by Goodman-Bacon and attempts to find an ATT with setups of:
+
+1. Multiple time periods (T  > 2) 
+
+2. Variation in treatment timing
+
+3. Parallel trends are conditional on observables / Availability of covariates
+
+- Related to Abadie [(2005)](https://economics.mit.edu/files/11869)
+
+## Apply Callaway and Sant'Anna when...
+1. Treatment effects are heterogeneous by time of adoption
+
+2. Treatment effects change over time
+
+3. Short-run effects are more pronounced (comparison groups shrink, so later estimates are less precise)
+
+- Doesn't (yet) account for intensity of treatments (or multiple treatments, or switching of treatment status)
+
+## Advantages of Callaway and Sant'Anna
+- *Pre-treatment covariates* can be included
+
+- Aggregation schemes to summarize treatment effects
+
+- Minimal parallel trend assumptions to identify the *ATT(g,t)*
+
+## How it works
+- Sub-setting the data over and over to map back to the well-understood 2x2 case. Similar to Sun and Abraham (2020) and Chaisemartin and D'Haultfœuille (2020)
+
+1. Identification of dis-aggregated parameters
+
+2. Aggregation of these parameters
+
+3. Estimation
+
+- Each treatment cohort, g,  will have its own ATT (except for the last treatment group in some cases)
+
+- Choose parallel trends assumption: Which comparison group is appropriate for your application. Are never-treated very different from not-yet treated?
+
+1. Use "never-treated" group for conditional parallel trends
+2. Use "not-yet-treated" group for conditional parallel trends (usually larger)
+
+## Covariates
+- Doubly robust:
+  + As long as the model of the propensity score *or* model for outcome evolution are correctly specified, we will recover ATT. Two opportunities (like Sant'Anna and Zhao (2020)) to get the ATT right
+- Careful using time-varying controls that might be impacted by the treatment
+
+## Aggregating Group-Time ATT
+
+- Subsetting so much, we might lose precision
+
+- Paper walks through the choices of weights, but we want to avoid the overweighting of units that are treated earlier
+
+Options for the weights:
+
+1. Event-Study/Dynamic treatment effect
+2. Cohort heterogeneity (pre-time period measure)
+3. Weight by calendar time
+
+## Assumptions
+
+- Sampling is panel data
+
+- Conditional Parallel Trends
+
+- Irreversible Treatment
+
+- Common support (via propensity score) a la Abadie [(2005)](https://economics.mit.edu/files/11869)
+
+- Limited treatment anticipation (ATT is 0 pre-treatment)
+
+## Implications
+
+- In essence, best to estimate narrow ATT per group-time. Can be useful if: 
+  1. Parallel trends only holds conditional on covariates
+  2. Different comparison groups (never or not-yet treated)
+  3. Units can anticipate treatment participation
+  
+- We might be (are very likely) interested in an aggregate estimate
+  + IPW
+  + Outcome regression
+  + Doubly Robust
+  
+- Will arrive at the same answer as Sun and Abraham (2020) if you are not using covariates
+
+## R package `did`
+- We see from implementing CS that we might have previously been *underestimating* our treatment effects.
+- Can easily specify not-yet-treated and never-treated controls
+- New [Stata version](https://www.stata.com/meeting/us21/slides/US21_SantAnna.pdf) by Rios-Avilia, Koren, Naqvi and Nichols
+
+```{r CS Castle, echo=F, include= T}
+didCSny <-att_gt(data=castle, 
+       yname="l_homicide",
+       tname="year",
+       idname="sid",
+       gname="g",
+       control_group = "notyettreated",
+       panel = T, 
+       allow_unbalanced_panel = T)
+
+didCSnt <-att_gt(data=castle, 
+       yname="l_homicide",
+       tname="year",
+       idname="sid",
+       gname="g",
+       control_group = "nevertreated",
+       panel = T, 
+       allow_unbalanced_panel = T)
+
+TEny <- aggte(didCSny, type="simple")
+TEnt <- aggte(didCSnt, type= "simple")
+
+print(paste("Aggregate Group-Time ATE (Not Yet) =", round(TEny$overall.att, 4)))
+
+print(paste("Aggregate Group-Time ATE (Never) =", round(TEnt$overall.att, 4)))
+```
+
+## Borusyak, Jaravel, and Spiess 2021
+- Shows problems with TWFE due to heterogeneity of treatment timing, but offers some solutions
+
+1. Separate Assumptions from Goals of estimator
+2. Describes problems with common practice
+3. Derive robust and efficient estimator from first principles
+4. Large sample theory and inference using estimator
+5. Approach to testing (separating from estimation)
+
+## Issues
+- View: TWFE doesn't work because
+1. Conflate the identifying assumptions of parallel trends and no anticipatory effects
+2. Assumptions that restrict treatment effect heterogeneity
+3. Specification of the estimand as a weighted average of treatment effects (Goodman-Bacon)
+
+## Issues, continued
+- Not ruling out anticipation effects leads to a specification problem
+  + "Fully dynamic" models (all leads and lags) are problematic
+  + We estimate a model to validate pretrends, but are assuming no anticipation...
+  
+-  Forbidden Comparison
+  + In no other method do we think it is OK to compare between different treatment cohorts when both have been treated
+  + similar to Goodman-Bacon
+  
+## Response
+- Response: Efficient estimator robust to treatment effect heterogeneity 
+  + Intuitive “imputation” form 
+  + Separate the assumption from the estimation
+  
+## Implications/ Framework
+1. Parallel Trends
+2. No anticipation
+3. Treatment-effect Model (optional)
+
+## Practice
+Basically, an imputation estimator:
+
+1. We know that our non-treated observations are $$ Y^0 = \mu_{i} + \lambda_{t} $$ and you can also use linear controls
+
+2. Estimate: $\hat\mu_{i}$ and $\hat\lambda_{t}$ on all controls
+
+3. Compute $\tau_{it} = Y_{1t} - \hat{Y}_{0t}$ to compute our weighted $\tau$
+
+4. Take averages of all the weighted $\tau_{it}$s
+
+Stata and R Packages : `did_imputation` and `event_plot`
+
+
+## Cengiz et al and Stacked DiD
+- Cengiz et al [(2019)](sciencedirect.com/science/article/pii/S030440762030378) Paper on minimum wage changes and low-wage jobs. Online Appendix D
+
+- Create a set of unique datasets with each treated cohort separated out and "clean controls" for the corresponding time horizon
+
+- Create "long" dataset, by appending (stacking) these newly created datasets together.
+
+## Stacked DiD
+- Now we are estimating the following regression, where outcomes are regressed on treatment status and dataset-specific group and period fixed effects:
+
+$$Y_{cgpit} = \lambda_{cg} + \lambda_{cp} + \beta D_{cgp} + \epsilon_{cgpit} $$
+- where *c* is and indicator for dataset, *g* is an indicator for treatment cohort, *i* is the unit, and *p* is the time period. 
+
+
+# Other DiD papers/techniques
+
+## Worth looking into...
+- Sun and Abraham [(2021)](sciencedirect.com/science/article/pii/S030440762030378X)
+
+- Chaisemartin and D'Haultfœuille [(2019)](https://www-aeaweb-org.ezproxy.bu.edu/articles?id=10.1257/aer.20181169)
+
+- Gardner [(2021)](https://jrgcmu.github.io/2sdd_current.pdf) 2-Stage Difference in Differences (also nice explanation of Stacked DiD)
+
+- Athey [(2021)](https://www.nber.org/system/files/working_papers/w25132/w25132.pdf) Imputation via matrix completion. Try to directly estimate the counterfactual. 
+
+# Concluding Remarks
+
+## What's next?
+- New literature seems a worthwhile investment of time for empirical researcher
+
+- Only scratched surface on these papers, meant to be almost a syllabus
+
+- When do these papers apply to your setting?
+  + Don't mention Goodman-Bacon if all treated units are treated at the same time!
+  + Depends on problems you face and the assumptions you want to make
+
+# Appendix
+
+## More Resources
+- Wooldridge 2-day DiD seminar [December 14-15](http://econ.msu.edu/estimate/index.php)
+- Scott Cunningham's "CodeChella" [recordings](https://www.youtube.com/watch?v=ZxHAyKC7Zkk&list=PLviXdOf4jSxRIXRYXLnV8H_ITRs6cvwQr)
+- [Wooldridge on "saving" TWFE](https://www.researchgate.net/publication/353938385_Two-Way_Fixed_Effects_the_Two-Way_Mundlak_Regression_and_Difference-in-Differences_Estimators) 
+- [Taylor Wright's DiD Reading Group (with video)](https://taylorjwright.github.io/did-reading-group/)
+
+
+## All-in-One Package
+- In both Stata and R `did2s` with function `event_study` shows you all the estimators in one plot!
+```{r, echo=F, warning=F, error=F, include=F}
+out <- did2s::event_study(data = did2s::df_het, yname = "dep_var", 
+                          idname = "unit", gname = "g",
+                          tname = "year")
+eplot <- did2s::plot_event_study(out)
+```
+```{r, echo=F, include=T, fig.width=3.5, fig.height=3}
+eplot +
+  ylab("Estimates") +
+  theme(legend.position = "none",
+        text = element_text(size=8))
+```
+
