@@ -53,7 +53,7 @@ castle <- haven::read_dta("https://github.com/scunning1975/mixtape/raw/master/ca
 ```
 
 ## Motivation
-![How many of us feel (Credit: Khoa Vu)]("/Users/emdenk/Documents/general references/difference in differences/didmeme.jpeg"){width=75%, height=75%}
+![How many of us feel (Credit: Khoa Vu)]("/Users/emdenk/Documents/general references/difference in differences/figures/didmeme.jpeg"){width=75%, height=75%}
 
 ## Outline
 - Describe newly raised **potential** issues with standard DiD estimates
@@ -81,7 +81,7 @@ castle <- haven::read_dta("https://github.com/scunning1975/mixtape/raw/master/ca
 
 - Helpful in answering big and important questions. State policies, changes in corporate laws, technology diffusion etc. 
 
-![Currie et al (2020) show 25% of NBER working papers use DiD]("/Users/emdenk/Documents/general references/difference in differences/curriemethods.png"){width=55%, height=55%}
+![Currie et al (2020) show 25% of NBER working papers use DiD]("/Users/emdenk/Documents/general references/difference in differences/figures/curriemethods.png"){width=55%, height=55%}
 
 ## Brief Review of TWFE
 In the 2x2 Case:
@@ -237,12 +237,12 @@ leadslags_plot %>%
   + Controls can introduce new and unintended identifying variation
 
 ## All possible 2x2s in the three group case
-![Goodman-Bacon Figure 1]("/Users/emdenk/Documents/general references/difference in differences/Goodman-BaconFig1.png"){width=70%, height=70%}
+![Goodman-Bacon Figure 1]("/Users/emdenk/Documents/general references/difference in differences/figures/Goodman-BaconFig1.png"){width=70%, height=70%}
 
 ## The forbidden comparison
 Panel D. Our late cohort is the treated and early treated cohort is control, but only after they are already treated. 
 
-![Goodman-Bacon Figure 1]("/Users/emdenk/Documents/general references/difference in differences/Goodman-BaconFig2.png"){width=70%, height=70%}
+![Goodman-Bacon Figure 1]("/Users/emdenk/Documents/general references/difference in differences/figures/Goodman-BaconFig2.png"){width=70%, height=70%}
 
 ## The Weights
 - The weights of the "Weighted 2x2" are determined by: 
@@ -267,7 +267,7 @@ Panel D. Our late cohort is the treated and early treated cohort is control, but
   + DD estimate is biased away from sign of true effect
   + This comparison group is "contaminated" and will cause us to underestimate the size of our treatment effect
   
-![Goodman-Bacon Figure 3]("/Users/emdenk/Documents/general references/difference in differences/Goodman-BaconFig3.png"){width=45%, height=45%}  
+![Goodman-Bacon Figure 3]("/Users/emdenk/Documents/general references/difference in differences/figures/Goodman-BaconFig3.png"){width=45%, height=45%}  
 
 ## Goodman-Bacon Implications (cont.)
 - If treatment effects are constant
